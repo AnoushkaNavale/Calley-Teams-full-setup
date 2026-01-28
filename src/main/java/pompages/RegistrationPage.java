@@ -201,6 +201,10 @@ public class RegistrationPage {
         }
     }
 
+    public boolean isCalleyTeamsPlanAvailable() {
+        return findOptionalClickable(calleyTeamsPlanLocators) != null;
+    }
+
     public void clickRegisterButton() {
         waitForRecaptchaIfPresent();
         try {

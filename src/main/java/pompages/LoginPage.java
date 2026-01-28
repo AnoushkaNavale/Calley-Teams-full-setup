@@ -62,7 +62,7 @@ public class LoginPage {
             String currentUrl = driver.getCurrentUrl().toLowerCase();
             return currentUrl.contains("login") || currentUrl.contains("signin");
         });
-        wait.until(driver -> findVisibleInAnyFrame(emailLocators) != null);
+        waitForVisible(emailLocators);
     }
 
     public void enterEmail(String email) {

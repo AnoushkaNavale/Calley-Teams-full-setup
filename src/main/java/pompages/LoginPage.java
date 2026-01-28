@@ -3,6 +3,7 @@ package main.java.pompages;
 import org.openqa.selenium.By;
 import org.openqa.selenium.NoSuchFrameException;
 import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -14,6 +15,7 @@ import java.util.List;
 public class LoginPage {
     private final WebDriver driver;
     private final WebDriverWait wait;
+    private final WebDriverWait longWait;
 
     private final By[] emailLocators = new By[]{
             By.cssSelector("input[id$='txtEmail']"),
@@ -34,8 +36,13 @@ public class LoginPage {
     private final By[] loginButtonLocators = new By[]{
             By.cssSelector("input[id$='btnLogin']"),
             By.cssSelector("button[id$='btnLogin']"),
+            By.cssSelector("input[name$='btnLogin']"),
+            By.cssSelector("button[type='submit']"),
+            By.cssSelector("input[type='submit']"),
+            By.cssSelector("input[type='button'][value*='Login']"),
             By.cssSelector("input[type='submit'][value*='Login']"),
-            By.xpath("//button[contains(normalize-space(.), 'Login') or contains(normalize-space(.), 'Sign In')]")
+            By.xpath("//button[contains(normalize-space(.), 'Login') or contains(normalize-space(.), 'Log In') or contains(normalize-space(.), 'Sign In')]"),
+            By.xpath("//a[contains(normalize-space(.), 'Login') or contains(normalize-space(.), 'Log In') or contains(normalize-space(.), 'Sign In')]")
     };
 
     private final By errorMessageLocator = By.xpath("//div[contains(@class,'error-message')]");
@@ -45,12 +52,17 @@ public class LoginPage {
     public LoginPage(WebDriver driver) {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        this.longWait = new WebDriverWait(driver, Duration.ofSeconds(60));
     }
 
     // Actions
     public void navigateToLoginPage(String url) {
         driver.get(url);
-        wait.until(ExpectedConditions.urlContains("Login"));
+        wait.until(driver -> {
+            String currentUrl = driver.getCurrentUrl().toLowerCase();
+            return currentUrl.contains("login") || currentUrl.contains("signin");
+        });
+        wait.until(driver -> findVisibleInAnyFrame(emailLocators) != null);
     }
 
     public void enterEmail(String email) {
@@ -66,8 +78,18 @@ public class LoginPage {
     }
 
     public void clickLoginButton() {
-        WebElement button = waitForClickable(loginButtonLocators);
-        button.click();
+        try {
+            WebElement button = waitForClickable(longWait, loginButtonLocators);
+            button.click();
+        } catch (TimeoutException e) {
+            WebElement fallback = findLoginButtonNearEmail();
+            if (fallback != null) {
+                fallback.click();
+                return;
+            }
+            logLoginDiagnostics();
+            throw e;
+        }
     }
 
     public boolean isLoginSuccessful() {
@@ -107,8 +129,8 @@ public class LoginPage {
         });
     }
 
-    private WebElement waitForClickable(By... locators) {
-        return wait.until(driver -> {
+    private WebElement waitForClickable(WebDriverWait waiter, By... locators) {
+        return waiter.until(driver -> {
             for (By locator : locators) {
                 WebElement element = findVisibleInAnyFrame(locator);
                 if (element != null && element.isEnabled()) {
@@ -117,6 +139,102 @@ public class LoginPage {
             }
             return null;
         });
+    }
+
+    private WebElement waitForClickable(By... locators) {
+        return waitForClickable(wait, locators);
+    }
+
+    private WebElement findLoginButtonNearEmail() {
+        WebElement emailField = findVisibleInAnyFrame(emailLocators[0]);
+        if (emailField == null) {
+            emailField = findVisibleInAnyFrame(By.cssSelector("input[type='email'], input[placeholder*='Email']"));
+        }
+        if (emailField == null) {
+            return null;
+        }
+
+        WebElement form = null;
+        try {
+            form = emailField.findElement(By.xpath("ancestor::form[1]"));
+        } catch (Exception ignored) {
+        }
+
+        List<WebElement> candidates = form != null
+                ? form.findElements(By.cssSelector("button, input[type='submit'], input[type='button']"))
+                : driver.findElements(By.cssSelector("button, input[type='submit'], input[type='button']"));
+
+        WebElement fallback = null;
+        for (WebElement candidate : candidates) {
+            if (!candidate.isDisplayed()) {
+                continue;
+            }
+            String text = getElementText(candidate);
+            if (containsIgnoreCase(text, "login") || containsIgnoreCase(text, "log in")
+                    || containsIgnoreCase(text, "sign in")) {
+                return candidate;
+            }
+            if (candidate.isEnabled() && fallback == null) {
+                fallback = candidate;
+            }
+        }
+        return fallback;
+    }
+
+    private void logLoginDiagnostics() {
+        System.out.println("[Login] URL: " + driver.getCurrentUrl());
+        System.out.println("[Login] Title: " + driver.getTitle());
+        boolean captchaPresent = !driver.findElements(By.cssSelector("iframe[src*='recaptcha'], div.g-recaptcha"))
+                .isEmpty();
+        if (captchaPresent) {
+            System.out.println("[Login] reCAPTCHA detected. Complete it manually during the run.");
+        }
+        List<WebElement> elements = driver.findElements(By.cssSelector("input, button, a"));
+        int shown = 0;
+        for (WebElement element : elements) {
+            if (!element.isDisplayed()) {
+                continue;
+            }
+            System.out.println("[Login] element: tag=" + element.getTagName()
+                    + " type=" + safeAttr(element, "type")
+                    + " id=" + safeAttr(element, "id")
+                    + " name=" + safeAttr(element, "name")
+                    + " value=" + safeAttr(element, "value")
+                    + " text=" + truncate(getElementText(element))
+                    + " placeholder=" + safeAttr(element, "placeholder")
+                    + " enabled=" + element.isEnabled());
+            shown++;
+            if (shown >= 12) {
+                break;
+            }
+        }
+    }
+
+    private String safeAttr(WebElement element, String name) {
+        String value = element.getAttribute(name);
+        return value == null ? "" : value;
+    }
+
+    private String getElementText(WebElement element) {
+        if ("input".equalsIgnoreCase(element.getTagName())) {
+            String value = element.getAttribute("value");
+            return value == null ? "" : value;
+        }
+        return element.getText();
+    }
+
+    private boolean containsIgnoreCase(String value, String needle) {
+        if (value == null) {
+            return false;
+        }
+        return value.toLowerCase().contains(needle.toLowerCase());
+    }
+
+    private String truncate(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.length() > 60 ? value.substring(0, 60) + "..." : value;
     }
 
     private WebElement findVisibleInAnyFrame(By locator) {

@@ -192,30 +192,6 @@ csv.filepath=C:/Users/YourName/Projects/CalleyTeamsFullSetup/src/main/resources/
 - Update credentials in data.properties
 - Check if account is active
 
-## Recording Test Execution
-
-### For Video Submission:
-1. **Windows:** Use OBS Studio or Windows Game Bar (Win + G)
-2. **Mac:** Use QuickTime Player or Screenshot utility (Cmd + Shift + 5)
-
-### Steps to Record:
-1. Start screen recording
-2. Run test suite: `mvn test`
-3. Show console output with test results
-4. Upload video to Google Drive
-5. Set sharing to "Anyone with the link can view"
-
-## Deliverables Checklist
-
-- [ ] Complete source code in GitHub repository or ZIP file
-- [ ] All test scenarios implemented
-- [ ] POM design pattern implemented
-- [ ] Data-driven approach using properties file
-- [ ] TestNG integration with XML configuration
-- [ ] Video recording of test execution
-- [ ] Google Drive link with open access
-- [ ] Email submission to hr@cstech.in
-
 ## GitHub Repository Structure
 ```
 CalleyTeamsAutomation/

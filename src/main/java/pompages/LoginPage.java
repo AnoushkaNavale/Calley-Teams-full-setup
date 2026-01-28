@@ -107,11 +107,18 @@ public class LoginPage {
 
     public boolean isLoginSuccessful() {
         try {
-            wait.until(ExpectedConditions.or(
-                    ExpectedConditions.urlContains("dashboard"),
-                    ExpectedConditions.visibilityOfElementLocated(dashboardHeaderLocator)));
+            if (clickIfPresent(goToDashboardLocator) || clickIfPresent(autodialComputerLocator)) {
+                waitForDashboard();
+                return true;
+            }
+            waitForDashboard();
             return true;
         } catch (Exception e) {
+            WebElement error = findVisibleInAnyFrame(errorMessageLocator);
+            if (error != null) {
+                System.out.println("[Login] Error message: " + error.getText());
+            }
+            logLoginDiagnostics();
             return false;
         }
     }
@@ -196,6 +203,12 @@ public class LoginPage {
             }
         }
         return fallback;
+    }
+
+    private void waitForDashboard() {
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.urlContains("dashboard"),
+                ExpectedConditions.visibilityOfElementLocated(dashboardHeaderLocator)));
     }
 
     private boolean clickIfPresent(By locator) {

@@ -47,6 +47,8 @@ public class LoginPage {
 
     private final By errorMessageLocator = By.xpath("//div[contains(@class,'error-message')]");
     private final By dashboardHeaderLocator = By.xpath("//h1[contains(text(),'Dashboard')] | //span[contains(text(),'Dashboard')]");
+    private final By goToDashboardLocator = By.xpath("//a[contains(normalize-space(.), 'Go to Dashboard') or contains(normalize-space(.), 'Go To Dashboard')]");
+    private final By autodialComputerLocator = By.xpath("//a[contains(normalize-space(.), 'Autodial using your computer')]");
 
     // Constructor
     public LoginPage(WebDriver driver) {
@@ -58,11 +60,22 @@ public class LoginPage {
     // Actions
     public void navigateToLoginPage(String url) {
         driver.get(url);
-        wait.until(driver -> {
-            String currentUrl = driver.getCurrentUrl().toLowerCase();
-            return currentUrl.contains("login") || currentUrl.contains("signin");
-        });
-        waitForVisible(emailLocators);
+        try {
+            waitForVisible(emailLocators);
+            return;
+        } catch (TimeoutException ignored) {
+            // Fall through for redirected landing page.
+        }
+
+        // Some flows redirect to a landing page before login.
+        if (clickIfPresent(goToDashboardLocator) || clickIfPresent(autodialComputerLocator)) {
+            waitForVisible(longWait, emailLocators);
+            return;
+        }
+
+        // If still not found, surface diagnostics to guide locator updates.
+        logLoginDiagnostics();
+        throw new TimeoutException("Login form not found after navigating to " + url);
     }
 
     public void enterEmail(String email) {
@@ -117,8 +130,8 @@ public class LoginPage {
         clickLoginButton();
     }
 
-    private WebElement waitForVisible(By... locators) {
-        return wait.until(driver -> {
+    private WebElement waitForVisible(WebDriverWait waiter, By... locators) {
+        return waiter.until(driver -> {
             for (By locator : locators) {
                 WebElement element = findVisibleInAnyFrame(locator);
                 if (element != null) {
@@ -127,6 +140,10 @@ public class LoginPage {
             }
             return null;
         });
+    }
+
+    private WebElement waitForVisible(By... locators) {
+        return waitForVisible(wait, locators);
     }
 
     private WebElement waitForClickable(WebDriverWait waiter, By... locators) {
@@ -179,6 +196,15 @@ public class LoginPage {
             }
         }
         return fallback;
+    }
+
+    private boolean clickIfPresent(By locator) {
+        WebElement element = findVisibleInAnyFrame(locator);
+        if (element != null) {
+            element.click();
+            return true;
+        }
+        return false;
     }
 
     private void logLoginDiagnostics() {

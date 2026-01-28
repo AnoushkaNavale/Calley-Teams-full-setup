@@ -128,6 +128,10 @@ public class RegistrationPage {
 
     public void enterEmail(String email) {
         WebElement field = waitForVisible(emailLocators);
+        if (shouldUseManualInput(email)) {
+            waitForManualValue(field, "email");
+            return;
+        }
         field.clear();
         field.sendKeys(email);
     }
@@ -150,6 +154,10 @@ public class RegistrationPage {
 
     public void enterPassword(String password) {
         WebElement field = waitForVisible(passwordLocators);
+        if (shouldUseManualInput(password)) {
+            waitForManualValue(field, "password");
+            return;
+        }
         field.clear();
         field.sendKeys(password);
     }
@@ -157,6 +165,10 @@ public class RegistrationPage {
     public void enterConfirmPassword(String confirmPassword) {
         WebElement field = findOptional(confirmPasswordLocators);
         if (field != null) {
+            if (shouldUseManualInput(confirmPassword)) {
+                waitForManualValue(field, "confirm password");
+                return;
+            }
             field.clear();
             field.sendKeys(confirmPassword);
         }
@@ -302,6 +314,29 @@ public class RegistrationPage {
             } catch (Exception e) {
                 return false;
             }
+        });
+    }
+
+    private boolean shouldUseManualInput(String value) {
+        if (value == null) {
+            return true;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return true;
+        }
+        String upper = trimmed.toUpperCase();
+        return upper.contains("YOUR_REAL_EMAIL")
+                || upper.contains("YOUR_REAL_PASSWORD")
+                || upper.equals("YOUR_EMAIL")
+                || upper.equals("YOUR_PASSWORD");
+    }
+
+    private void waitForManualValue(WebElement field, String label) {
+        System.out.println("[Registration] Waiting for manual " + label + " entry.");
+        longWait.until(driver -> {
+            String value = field.getAttribute("value");
+            return value != null && !value.trim().isEmpty();
         });
     }
 

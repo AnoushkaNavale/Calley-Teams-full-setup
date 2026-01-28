@@ -1,6 +1,7 @@
 package main.java.pompages;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchFrameException;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TimeoutException;
@@ -191,8 +192,25 @@ public class RegistrationPage {
 
     public void clickRegisterButton() {
         waitForRecaptchaIfPresent();
-        WebElement button = waitForClickable(registerButtonLocators);
-        button.click();
+        try {
+            WebElement button = waitForClickable(longWait, registerButtonLocators);
+            scrollIntoView(button);
+            button.click();
+            return;
+        } catch (TimeoutException ignored) {
+        }
+
+        WebElement fallback = findInAnyFrame(registerButtonLocators);
+        if (fallback != null) {
+            scrollIntoView(fallback);
+            if (fallback.isEnabled()) {
+                fallback.click();
+                return;
+            }
+        }
+
+        System.out.println("[Registration] Register button not clickable. Click it manually.");
+        waitForManualSubmit();
     }
 
     public boolean isRegistrationSuccessful() {
@@ -219,8 +237,8 @@ public class RegistrationPage {
         });
     }
 
-    private WebElement waitForClickable(By... locators) {
-        return wait.until(driver -> {
+    private WebElement waitForClickable(WebDriverWait waiter, By... locators) {
+        return waiter.until(driver -> {
             for (By locator : locators) {
                 WebElement element = findVisibleInAnyFrame(locator);
                 if (element != null && element.isEnabled()) {
@@ -229,6 +247,10 @@ public class RegistrationPage {
             }
             return null;
         });
+    }
+
+    private WebElement waitForClickable(By... locators) {
+        return waitForClickable(wait, locators);
     }
 
     private WebElement findOptional(By... locators) {
@@ -285,6 +307,32 @@ public class RegistrationPage {
         return null;
     }
 
+    private WebElement findInAnyFrame(By... locators) {
+        driver.switchTo().defaultContent();
+        for (By locator : locators) {
+            WebElement element = findInCurrentContext(locator);
+            if (element != null) {
+                return element;
+            }
+        }
+        List<WebElement> frames = driver.findElements(By.cssSelector("iframe,frame"));
+        for (WebElement frame : frames) {
+            try {
+                driver.switchTo().defaultContent();
+                driver.switchTo().frame(frame);
+                for (By locator : locators) {
+                    WebElement element = findInCurrentContext(locator);
+                    if (element != null) {
+                        return element;
+                    }
+                }
+            } catch (NoSuchFrameException | StaleElementReferenceException ignored) {
+            }
+        }
+        driver.switchTo().defaultContent();
+        return null;
+    }
+
     private WebElement findVisibleInCurrentContext(By locator) {
         try {
             List<WebElement> elements = driver.findElements(locator);
@@ -292,6 +340,18 @@ public class RegistrationPage {
                 if (element.isDisplayed()) {
                     return element;
                 }
+            }
+        } catch (StaleElementReferenceException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private WebElement findInCurrentContext(By locator) {
+        try {
+            List<WebElement> elements = driver.findElements(locator);
+            if (!elements.isEmpty()) {
+                return elements.get(0);
             }
         } catch (StaleElementReferenceException ignored) {
             return null;
@@ -315,6 +375,27 @@ public class RegistrationPage {
                 return false;
             }
         });
+    }
+
+    private void waitForManualSubmit() {
+        longWait.until(driver -> {
+            try {
+                return ExpectedConditions.or(
+                        ExpectedConditions.visibilityOfElementLocated(successMessageLocator),
+                        ExpectedConditions.urlContains("dashboard"),
+                        ExpectedConditions.urlContains("login")
+                ).apply(driver);
+            } catch (Exception e) {
+                return false;
+            }
+        });
+    }
+
+    private void scrollIntoView(WebElement element) {
+        try {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", element);
+        } catch (Exception ignored) {
+        }
     }
 
     private boolean shouldUseManualInput(String value) {

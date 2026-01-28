@@ -3,6 +3,7 @@ package main.java.pompages;
 import org.openqa.selenium.By;
 import org.openqa.selenium.NoSuchFrameException;
 import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -14,11 +15,15 @@ import java.util.List;
 public class RegistrationPage {
     private final WebDriver driver;
     private final WebDriverWait wait;
+    private final WebDriverWait shortWait;
+    private final WebDriverWait longWait;
 
     private final By[] firstNameLocators = new By[]{
             By.cssSelector("input[id$='txtFirstName']"),
             By.cssSelector("input[name$='txtFirstName']"),
+            By.cssSelector("input[placeholder*='Your Name']"),
             By.cssSelector("input[placeholder*='First']"),
+            By.cssSelector("input[placeholder*='Name']"),
             By.xpath("//label[contains(normalize-space(.), 'First')]/following::input[1]")
     };
 
@@ -34,6 +39,7 @@ public class RegistrationPage {
             By.cssSelector("input[name$='txtEmail']"),
             By.cssSelector("input[type='email']"),
             By.cssSelector("input[placeholder*='Email']"),
+            By.cssSelector("input[placeholder*='Email Id']"),
             By.xpath("//label[contains(normalize-space(.), 'Email')]/following::input[1]")
     };
 
@@ -42,6 +48,8 @@ public class RegistrationPage {
             By.cssSelector("input[name$='txtPhone']"),
             By.cssSelector("input[type='tel']"),
             By.cssSelector("input[placeholder*='Phone']"),
+            By.cssSelector("input[placeholder*='Whatsapp']"),
+            By.cssSelector("input[placeholder*='WhatsApp']"),
             By.xpath("//label[contains(normalize-space(.), 'Phone')]/following::input[1]")
     };
 
@@ -55,6 +63,7 @@ public class RegistrationPage {
     private final By[] passwordLocators = new By[]{
             By.cssSelector("input[id$='txtPassword']"),
             By.cssSelector("input[name$='txtPassword']"),
+            By.cssSelector("input[type='password']"),
             By.cssSelector("input[placeholder*='Password']:not([placeholder*='Confirm'])"),
             By.xpath("//label[contains(normalize-space(.), 'Password')]/following::input[1]")
     };
@@ -77,17 +86,22 @@ public class RegistrationPage {
             By.cssSelector("input[id$='btnRegister']"),
             By.cssSelector("button[id$='btnRegister']"),
             By.cssSelector("input[type='submit'][value*='Register']"),
+            By.cssSelector("input[type='button'][value*='Register']"),
             By.xpath("//button[contains(normalize-space(.), 'Register') or contains(normalize-space(.), 'Sign Up')]")
     };
 
     private final By successMessageLocator = By.xpath(
             "//div[contains(@class,'success-message')] | //div[contains(@class,'success')] | //span[contains(@class,'success')]"
     );
+    private final By recaptchaResponseLocator = By.cssSelector("textarea#g-recaptcha-response");
+    private final By recaptchaFrameLocator = By.cssSelector("iframe[src*='recaptcha'], iframe[title*='reCAPTCHA']");
 
     // Constructor
     public RegistrationPage(WebDriver driver) {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        this.shortWait = new WebDriverWait(driver, Duration.ofSeconds(5));
+        this.longWait = new WebDriverWait(driver, Duration.ofSeconds(120));
     }
 
     // Actions
@@ -103,9 +117,13 @@ public class RegistrationPage {
     }
 
     public void enterLastName(String lastName) {
-        WebElement field = waitForVisible(lastNameLocators);
-        field.clear();
-        field.sendKeys(lastName);
+        WebElement field = findOptional(lastNameLocators);
+        if (field != null) {
+            field.clear();
+            field.sendKeys(lastName);
+            return;
+        }
+        appendLastNameToNameField(lastName);
     }
 
     public void enterEmail(String email) {
@@ -115,15 +133,19 @@ public class RegistrationPage {
     }
 
     public void enterPhone(String phone) {
-        WebElement field = waitForVisible(phoneLocators);
-        field.clear();
-        field.sendKeys(phone);
+        WebElement field = findOptional(phoneLocators);
+        if (field != null) {
+            field.clear();
+            field.sendKeys(phone);
+        }
     }
 
     public void enterCompany(String company) {
-        WebElement field = waitForVisible(companyLocators);
-        field.clear();
-        field.sendKeys(company);
+        WebElement field = findOptional(companyLocators);
+        if (field != null) {
+            field.clear();
+            field.sendKeys(company);
+        }
     }
 
     public void enterPassword(String password) {
@@ -133,13 +155,19 @@ public class RegistrationPage {
     }
 
     public void enterConfirmPassword(String confirmPassword) {
-        WebElement field = waitForVisible(confirmPasswordLocators);
-        field.clear();
-        field.sendKeys(confirmPassword);
+        WebElement field = findOptional(confirmPasswordLocators);
+        if (field != null) {
+            field.clear();
+            field.sendKeys(confirmPassword);
+        }
     }
 
     public void selectCalleyTeamsPlan() {
-        WebElement plan = waitForClickable(calleyTeamsPlanLocators);
+        WebElement plan = findOptionalClickable(calleyTeamsPlanLocators);
+        if (plan == null) {
+            System.out.println("[Registration] Calley Teams plan not found, skipping selection.");
+            return;
+        }
         if ("input".equalsIgnoreCase(plan.getTagName())) {
             if (!plan.isSelected()) {
                 plan.click();
@@ -150,6 +178,7 @@ public class RegistrationPage {
     }
 
     public void clickRegisterButton() {
+        waitForRecaptchaIfPresent();
         WebElement button = waitForClickable(registerButtonLocators);
         button.click();
     }
@@ -190,6 +219,38 @@ public class RegistrationPage {
         });
     }
 
+    private WebElement findOptional(By... locators) {
+        try {
+            return shortWait.until(driver -> {
+                for (By locator : locators) {
+                    WebElement element = findVisibleInAnyFrame(locator);
+                    if (element != null) {
+                        return element;
+                    }
+                }
+                return null;
+            });
+        } catch (TimeoutException e) {
+            return null;
+        }
+    }
+
+    private WebElement findOptionalClickable(By... locators) {
+        try {
+            return shortWait.until(driver -> {
+                for (By locator : locators) {
+                    WebElement element = findVisibleInAnyFrame(locator);
+                    if (element != null && element.isEnabled()) {
+                        return element;
+                    }
+                }
+                return null;
+            });
+        } catch (TimeoutException e) {
+            return null;
+        }
+    }
+
     private WebElement findVisibleInAnyFrame(By locator) {
         driver.switchTo().defaultContent();
         WebElement element = findVisibleInCurrentContext(locator);
@@ -226,6 +287,24 @@ public class RegistrationPage {
         return null;
     }
 
+    private void waitForRecaptchaIfPresent() {
+        boolean captchaPresent = !driver.findElements(recaptchaFrameLocator).isEmpty()
+                || !driver.findElements(recaptchaResponseLocator).isEmpty();
+        if (!captchaPresent) {
+            return;
+        }
+        System.out.println("[Registration] reCAPTCHA detected. Please solve it in the browser.");
+        longWait.until(driver -> {
+            try {
+                WebElement response = driver.findElement(recaptchaResponseLocator);
+                String value = response.getAttribute("value");
+                return value != null && !value.trim().isEmpty();
+            } catch (Exception e) {
+                return false;
+            }
+        });
+    }
+
     public void registerUser(String firstName, String lastName, String email,
             String phone, String company, String password) {
         enterFirstName(firstName);
@@ -237,5 +316,23 @@ public class RegistrationPage {
         enterConfirmPassword(password);
         selectCalleyTeamsPlan();
         clickRegisterButton();
+    }
+
+    private void appendLastNameToNameField(String lastName) {
+        WebElement nameField = findOptional(
+                By.cssSelector("input[placeholder*='Your Name']"),
+                By.cssSelector("input[placeholder*='Name']"),
+                By.xpath("//label[contains(normalize-space(.), 'Name')]/following::input[1]")
+        );
+        if (nameField == null) {
+            return;
+        }
+        String existing = nameField.getAttribute("value");
+        if (existing == null) {
+            existing = "";
+        }
+        if (!existing.toLowerCase().contains(lastName.toLowerCase())) {
+            nameField.sendKeys(existing.isEmpty() ? lastName : " " + lastName);
+        }
     }
 }

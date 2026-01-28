@@ -1,6 +1,7 @@
 package main.java.pompages;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchFrameException;
 import org.openqa.selenium.StaleElementReferenceException;
@@ -80,7 +81,8 @@ public class RegistrationPage {
             By.xpath("//input[contains(@value,'Calley Teams')]"),
             By.xpath("//label[contains(normalize-space(.), 'Calley Teams')]/preceding::input[1]"),
             By.xpath("//label[contains(normalize-space(.), 'Calley Teams')]/following::input[1]"),
-            By.xpath("//*[contains(normalize-space(.), 'Calley Teams') and (self::label or self::div or self::span)]")
+            By.cssSelector("input[type='radio'][value*='Calley']"),
+            By.cssSelector("input[type='checkbox'][value*='Calley']")
     };
 
     private final By[] registerButtonLocators = new By[]{
@@ -102,7 +104,7 @@ public class RegistrationPage {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         this.shortWait = new WebDriverWait(driver, Duration.ofSeconds(5));
-        this.longWait = new WebDriverWait(driver, Duration.ofSeconds(120));
+        this.longWait = new WebDriverWait(driver, Duration.ofSeconds(300));
     }
 
     // Actions
@@ -181,12 +183,21 @@ public class RegistrationPage {
             System.out.println("[Registration] Calley Teams plan not found, skipping selection.");
             return;
         }
-        if ("input".equalsIgnoreCase(plan.getTagName())) {
-            if (!plan.isSelected()) {
+        if (!isPlanElement(plan)) {
+            System.out.println("[Registration] Calley Teams plan not selectable, skipping.");
+            return;
+        }
+        try {
+            scrollIntoView(plan);
+            if ("input".equalsIgnoreCase(plan.getTagName())) {
+                if (!plan.isSelected()) {
+                    plan.click();
+                }
+            } else {
                 plan.click();
             }
-        } else {
-            plan.click();
+        } catch (ElementClickInterceptedException e) {
+            System.out.println("[Registration] Plan selection intercepted. Skipping.");
         }
     }
 
@@ -396,6 +407,17 @@ public class RegistrationPage {
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", element);
         } catch (Exception ignored) {
         }
+    }
+
+    private boolean isPlanElement(WebElement element) {
+        String tag = element.getTagName();
+        if ("input".equalsIgnoreCase(tag)) {
+            return true;
+        }
+        if ("label".equalsIgnoreCase(tag)) {
+            return true;
+        }
+        return false;
     }
 
     private boolean shouldUseManualInput(String value) {

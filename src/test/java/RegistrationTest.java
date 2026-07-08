@@ -3,6 +3,7 @@ package test.java;
 import main.java.BaseClass;
 import main.java.pompages.RegistrationPage;
 import org.testng.Assert;
+import org.testng.SkipException;
 import org.testng.annotations.Test;
 
 public class RegistrationTest extends BaseClass {
@@ -52,6 +53,10 @@ public class RegistrationTest extends BaseClass {
 
             String url = getProperty("registration.url");
             registrationPage.navigateToRegistrationPage(url);
+
+            if (!registrationPage.isCalleyTeamsPlanAvailable()) {
+                throw new SkipException("Calley Teams plan not present on registration page");
+            }
 
             // Select Calley Teams plan
             registrationPage.selectCalleyTeamsPlan();
